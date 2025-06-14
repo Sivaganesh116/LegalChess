@@ -6,7 +6,7 @@ Zobrist::Zobrist() {
     initRandomKeys();
 }
 
-std::shared_ptr<Zobirst> Zobrist::getInstance() {
+std::shared_ptr<const Zobrist> Zobrist::getInstance() {
     if(m_pInstance == nullptr) return m_pInstance = std::make_shared<const Zobrist>();
 
     return m_pInstance;
@@ -35,7 +35,7 @@ void Zobrist::initRandomKeys() {
 }
 
 // Compute the Zobrist hash for a given position
-uint64_t Zobrist::computeHash(const Piece board[8][8], bool whiteToMove, int castlingRights, int enPassantFile) {
+uint64_t Zobrist::computeHash(Piece board[8][8], bool whiteToMove, int castlingRights, int enPassantFile) const {
     uint64_t hash = 0;
 
     for (int i = 0; i<8; i++) {
@@ -44,7 +44,7 @@ uint64_t Zobrist::computeHash(const Piece board[8][8], bool whiteToMove, int cas
             Piece piece = board[i][j];
             if (piece == Piece::EMPTY) continue; // empty square
 
-            int index = piece;
+            int index = (int)piece;
             
             hash ^= pieceHash[index][square];
         }

@@ -11,16 +11,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
 
 # Set the output binary directory
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-# Set the output binary directory
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/)
 
 # set(CMAKE_BUILD_TYPE Debug)
 # set(CMAKE_CXX_FLAGS_DEBUG "-g")
-
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/build/)
 
 #Add include directories
 include_directories(
@@ -29,7 +23,7 @@ include_directories(
 
 add_library(LegalChess STATIC
     ${CMAKE_SOURCE_DIR}/src/Board.cpp
-    ${CMAKE_SOURCE_DIR}/src/MoveManager.cpp
     ${CMAKE_SOURCE_DIR}/src/Helper.cpp
     ${CMAKE_SOURCE_DIR}/src/Zobrist.cpp
+    ${CMAKE_SOURCE_DIR}/src/MoveManager.cpp
 )

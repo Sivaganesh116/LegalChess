@@ -1,3 +1,6 @@
+#ifndef __ZOBRIST_H__
+#define __ZOBRIST_H__
+
 #include <array>
 #include <random>
 #include <cstdint>
@@ -28,7 +31,9 @@ public:
     void initRandomKeys();
 
     // Compute the Zobrist hash for a given position
-    uint64_t computeHash(const Piece board[8][8], bool whiteToMove, int castlingRights, int enPassantFile);
+    uint64_t computeHash(Piece board[8][8], bool whiteToMove, int castlingRights, int enPassantFile) const;
 };
 
 }
+
+#endif

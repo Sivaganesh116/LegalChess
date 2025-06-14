@@ -22,7 +22,7 @@ CheckType PawnMoveManager::handlePromotion(Piece newPiece, int fromRow, int from
     board.updatePieceCountOnBoard(newPiece, toRow*8 + toCol, true);
 
 
-    if(true) { // To-Do: is my king under check after my move is made
+    if(isKingUnderCheck(isPieceWhite, board)) {  // is my king under check after my move is made
         // undo the move
         board.updatePieceCountOnBoard(newPiece, toRow*8 + toCol, false);
 
@@ -33,12 +33,21 @@ CheckType PawnMoveManager::handlePromotion(Piece newPiece, int fromRow, int from
         // To-Do: throw error
     }
 
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    uint64_t pieceAttacks = 0;
 
-        if(true) { // if the move results in discovery check
-            // To-Do: update the discovery check square
+    if(newPiece == Piece::WHITE_QUEEN || Piece::BLACK_QUEEN) pieceAttacks = getQueenAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
+    else if(newPiece == Piece::WHITE_KNIGHT || newPiece == Piece::BLACK_KNIGHT) pieceAttacks = knightAttacksForSquare[toRow*8 + toCol];
+    else if(newPiece == Piece::WHITE_BISHOP || newPiece == Piece::BLACK_BISHOP) pieceAttacks = getBishopAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
+    else if(newPiece == Piece::WHITE_ROOK || newPiece == Piece::BLACK_ROOK) pieceAttacks = getRookAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
+
+
+    // Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = toRow*8 + toCol;
+
+        if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+            return CheckType::DOUBLE_CHECK;
         }
 
         return CheckType::DIRECT_CHECK;
@@ -76,12 +85,15 @@ CheckType PawnMoveManager::handleMove(int fromRow, int fromCol, int toRow, int t
         board.enpassantSquare = isPieceWhite ? fromRow*8 + fromCol + 8 : fromRow*8 + fromCol - 8;
     }
 
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    uint64_t pieceAttacks = getPawnAttacksForSquare(toRow*8 + toCol, isPieceWhite);
 
-        if(true) { // if the move results in discovery check
-            // To-Do: update the discovery check square
+    // Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = toRow*8 + toCol;
+
+        if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+            return CheckType::DOUBLE_CHECK;
         }
 
         return CheckType::DIRECT_CHECK;
@@ -111,12 +123,15 @@ CheckType KnightMoveManager::handleMove(int fromRow, int fromCol, int toRow, int
             // To-Do: throw error
         }
 
-        // To-Do: Return the check type the move results in
-        if(true) { // if the piece directly checks the opponent king
-            // To-Do: update the direct check square
+        uint64_t pieceAttacks = knightAttacksForSquare[toRow*8 + toCol];
 
-            if(true) { // if the move results in discovery check
-                // To-Do: update the discovery check square
+        // Return the check type the move results in
+        if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING))) != 0) { // if the new piece directly checks the opponent king
+            // update the direct check square
+            board.directCheckSquare = toRow*8 + toCol;
+
+            if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+                return CheckType::DOUBLE_CHECK;
             }
 
             return CheckType::DIRECT_CHECK;
@@ -152,12 +167,15 @@ CheckType BishopMoveManager::handleMove(int fromRow, int fromCol, int toRow, int
         // To-Do: throw error
     }
 
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    uint64_t pieceAttacks = getBishopAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
 
-        if(true) { // if the move results in discovery check
-            // To-Do: update the discovery check square
+    // Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = toRow*8 + toCol;
+
+        if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+            return CheckType::DOUBLE_CHECK;
         }
 
         return CheckType::DIRECT_CHECK;
@@ -188,13 +206,25 @@ CheckType RookMoveManager::handleMove(int fromRow, int fromCol, int toRow, int t
 
         // To-Do: throw error
     }
+    
+    if(isPieceWhite) {
+        if(board.canWhiteShortCastle && fromRow*8 + fromCol == 0) board.canWhiteShortCastle = false;
+        else if(board.canWhiteLongCastle && fromRow*8 + fromCol == 7) board.canWhiteLongCastle = false;
+    }
+    else  {
+        if(board.canBlackShortCastle && fromRow*8 + fromCol == 0) board.canBlackShortCastle = false;
+        else if(board.canBlackLongCastle && fromRow*8 + fromCol == 7) board.canBlackLongCastle = false;
+    }
 
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    uint64_t pieceAttacks = getRookAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
 
-        if(true) { // if the move results in discovery check
-            // To-Do: update the discovery check square
+    // Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = toRow*8 + toCol;
+
+        if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+            return CheckType::DOUBLE_CHECK;
         }
 
         return CheckType::DIRECT_CHECK;
@@ -226,12 +256,15 @@ CheckType QueenMoveManager::handleMove(int fromRow, int fromCol, int toRow, int 
         // To-Do: throw error
     }
 
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    uint64_t pieceAttacks = getQueenAttacksForSquareAndOccupancy(toRow*8 + toCol, board.allPieces);
 
-        if(true) { // if the move results in discovery check
-            // To-Do: update the discovery check square
+    // Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = toRow*8 + toCol;
+
+        if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
+            return CheckType::DOUBLE_CHECK;
         }
 
         return CheckType::DIRECT_CHECK;
@@ -242,7 +275,7 @@ CheckType QueenMoveManager::handleMove(int fromRow, int fromCol, int toRow, int 
 
 CheckType KingMoveManager::handleMove(int fromRow, int fromCol, int toRow, int toCol, bool isPieceWhite, Board& board) {
     // check move pattern
-    if(abs(fromRow - toRow) == 2 && fromCol == toCol) {
+    if(abs(fromCol - toCol) == 2 && fromRow == toRow && (isPieceWhite ? fromRow*8 + fromCol == 3 : fromRow*8 + fromCol == 59)) {
         return handleKingCastle(toCol == 1, isPieceWhite, board);
     }
 
@@ -273,9 +306,7 @@ CheckType KingMoveManager::handleMove(int fromRow, int fromCol, int toRow, int t
     else if(!isPieceWhite && board.canBlackKingShortCastle) board.canBlackKingShortCastle = board.canBlackKingLongCastle = false; 
 
     // a king move can only deliver a discovery check
-    if(true) { // if the move results in discovery check
-        // To-Do: update the discovery check square
-
+    if(getPinDirection(!isPieceWhite, fromRow*8 + fromCol, board, true)) { // if the move results in discovery check
         return CheckType::DISCOVERY_CHECK;
     }
 
@@ -287,21 +318,21 @@ CheckType KingMoveManager::handleKingCastle(bool shortSide, bool isPieceWhite, B
         // To-Do: throw error
     }
 
-    int kingSquare = isPieceWhite ? 3 : 59; int kingToSquare = shortSide ? 1 : 5;
+    int kingSquare = isPieceWhite ? 3 : 59; int kingToSquare = (shortSide ? (isPieceWhite ? 1 : 57) : (isPieceWhite ? 5 : 61));
     int rookSquare = isPieceWhite ? (shortSide ? 0 : 7) : (shortSide : 56 : 63);
     int rookToSquare = shortSide ? shortSide ? kingToSquare + 1 : kingToSquare - 1;
 
     // mask from king square to destination king square
-    uint64_t inBetweenMask = rangeMasks[kingSquare][isPieceWhite ? kingToSquare : 56 + kingToSquare];
+    uint64_t inBetweenMask = rangeMasks[kingSquare][kingToSquare];
     inBetweenMask &= ~(1ULL << kingToSquare);
 
     // if the king path squares are attacked, castling is not possible, throw error
-    if((inBetweenMask & generateLegalAttacksForColor(!isPieceWhite, false, true, board) != 0)) {
+    if((inBetweenMask & generateLegalAttacksForColor(!isPieceWhite, false, true, false, board) != 0)) {
         // throw error
     }
 
     // update king move
-    board.updatePieceMoveOnBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING, kingSquare, isPieceWhite ? kingToSquare : kingToSquare + 56);
+    board.updatePieceMoveOnBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING, kingSquare, kingToSquare);
 
     // update rook move
     board.updatePieceMoveOnBoard(isPieceWhite ? Piece::WHITE_ROOK : Piece::BLACK_ROOK, rookSquare, rookToSquare);
@@ -309,10 +340,17 @@ CheckType KingMoveManager::handleKingCastle(bool shortSide, bool isPieceWhite, B
     if(isPieceWhite) board.canWhiteKingShortCastle = board.canWhiteKingLongCastle = false;
     else board.canBlackKingShortCastle = board.canBlackKingLongCastle = false;
 
+    // only update the rooks in grid
+    board.grid[rookToSquare/8][rookToSquare%8] = isPieceWhite ? Piece::WHITE_ROOK : Piece::BLACK_ROOK;
+    board.grid[rookSquare/8][rookSquare%8] = Piece::EMPTY;
+
+    uint64_t pieceAttacks = getRookAttacksForSquareAndOccupancy(rookToSquare, board.allPieces);
+
     // castling can result only in direct checks
-    // To-Do: Return the check type the move results in
-    if(true) { // if the piece directly checks the opponent king
-        // To-Do: update the direct check square
+    //  Return the check type the move results in
+    if((pieceAttacks & (1ULL << getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the piece directly checks the opponent king
+        // update the direct check square
+        board.directCheckSquare = rookToSquare;
 
         return CheckType::DIRECT_CHECK;
     }
@@ -322,7 +360,7 @@ CheckType KingMoveManager::handleKingCastle(bool shortSide, bool isPieceWhite, B
 
 std::shared_ptr<const MoveManagerStore> MoveManagerStore::m_pInstance = nullptr;
 
-MoveManagerFactory::MoveManagerFactory() {
+MoveManagerStore::MoveManagerStore() {
     m_MoveManagers[0] = std::make_shared<PawnMoveManager>();
     m_MoveManagers[1] = std::make_shared<KnightMoveManager>();
     m_MoveManagers[2] = std::make_shared<BishopMoveManager>();
@@ -331,8 +369,8 @@ MoveManagerFactory::MoveManagerFactory() {
     m_MoveManagers[5] = std::make_shared<KingMoveManager>();
 }
 
-inline std:shared_ptr<MoveManager> MoveManagerStore::getPieceMoveManager(Piece piece) const {
-    return m_moveManagers[(int)piece];
+inline std::shared_ptr<MoveManager> MoveManagerStore::getPieceMoveManager(Piece piece) const {
+    return m_MoveManagers[(int)piece % 6];
 }
 
 std::shared_ptr<const MoveManagerStore> MoveManagerStore::getMoveManagerStore() {

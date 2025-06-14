@@ -1,3 +1,6 @@
+#ifndef __BOARD_H__
+#define __BOARD_H__
+
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -5,11 +8,12 @@
 #include <memory>
 
 #include "MoveManager.h"
-
+#include "Zobrist.h"
 
 namespace LC {
 
 class MoveManager;
+class Zobrist;
 
 enum class Piece {
     WHITE_PAWN, 
@@ -37,7 +41,7 @@ enum class CheckType {
 class Board {
 public:
     Board();
-    ~Board();
+    ~Board() = default;
 
     inline void updatePieceMoveOnBoard(Piece piece, int fromSquare, int toSquare);
 
@@ -48,6 +52,8 @@ public:
     inline uint64_t getPieceBitBoard(Piece piece) const;
     inline uint64_t getColorBitBoard(bool white) const;
     inline uint64_t getAllPiecesBitBoard() const;
+    inline Piece getPieceOnBoard(int square);
+    inline void updateDiscoveryCheckSquare(int square);
 
 
     inline bool isGameOver() const;
@@ -61,27 +67,30 @@ public:
     inline std::vector<std::vector<char>> getBoard() const;
     inline std::string getMoveHistory() const;
 
-private:
-    void initBoard();
-
-    uint64_t piecesArray[12];
-    uint64_t allWhitePiecesBoard, allBlackPiecesBoard, allPiecesBoard;
-
-    Piece grid[64][64];
-
+    std::unordered_map<uint64_t, uint16_t> positionHashToFreq;
     bool isWhiteTurn;
     bool canWhiteKingShortCastle, canWhiteKingLongCastle, canBlackKingShortCastle, canBlackKingLongCastle;
-    bool isGameOver, isWhiteKingCheckmated, isBlackKingCheckmated, isStalemate, isDrawByRepitition, isDrawBy50HalfMoves, isDrawByInsufficientMaterial;
+    bool gameOver, whiteKingCheckmated, blackKingCheckmated, stalemate, drawByRepitition, drawBy50HalfMoves, drawByInsufficientMaterial;
 
     uint16_t enpassantSquare, discoveryCheckSquare, directCheckSquare;
     uint16_t halfMovesCount, movesCount; // they treat each player's turn as different moves
     
     char result;
 
-    std::unordered_map<uint64_t, uint16_t> positionHashToFreq;
+private:
+    void initBoard();
+
+    uint64_t piecesArray[12];
+    uint64_t allWhitePiecesBoard, allBlackPiecesBoard, allPiecesBoard;
+
+    Piece grid[8][8];
+    std::string moveHistory;
+
     std::shared_ptr<const MoveManagerStore> m_pMoveManagerStore;
-    std::shared_ptr<const ZobristHash> m_pZobristHash;
+    std::shared_ptr<const Zobrist> m_pZobrist;
 };
 
 
 };
+
+#endif
