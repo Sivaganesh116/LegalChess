@@ -10,6 +10,8 @@
 
 namespace LC {
 
+enum class Piece;
+
 class Zobrist {
 private:
     static constexpr int NUM_SQUARES = 64;

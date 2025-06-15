@@ -1,97 +1,68 @@
-#ifndef __MoveManager_h__
-#define __MoveManager_h__
+#ifndef __MOVE_MANAGER_H__
+#define __MOVE_MANAGER_H__
 
 #include "Board.h"
 
-#include <cstdint>
-
 namespace LC {
 
-// each value represents the position of piece relative to king
-enum PinDirection {
-    NONE,
-    FILE,
-    RANK,
-    LEFT_DIAG,
-    RIGHT_DIAG
-};
-
+class Move;
 class Board;
+enum class CheckType;
+enum class Piece;
 
-class IMoveManager {
+class MoveManager {
 public:
-    static PinDirection getPinDirection(bool white, int pieceSquare, Board & board, bool updateDiscoveryCheckSquare);
-    static uint64_t generateLegalAttacks(bool, bool, Board&);
-    static bool isKingUnderCheck(bool isWhite, Board& board);
-    static uint64_t getBishopAttacksForCurrentBoardState(int square, uint64_t allPieces);
-    static uint64_t getRookAttacksForCurrentBoardState(int square, uint64_t allPieces);
-    static uint64_t getQueenAttacksForCurrentBoardState(int square, uint64_t allPieces);
-    static CheckType handlePromotion(char newPiece, int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board);
-    static void handleKingCastle(bool shortSide, bool isWhite, Board& board);
+    virtual CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) = 0;
+};
 
-    
+class PawnMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+    CheckType handlePromotion(Piece newPiece, bool isPieceWhite, const Move& move, Board& board);
+};
 
-    // check pattern
-    // perform move
-    // generate opponent legal attacks
-    // if king under check undo the move
-    // generate our own legal attacks
-    // if opponent king under check, check for checkmate
-    // else check for stalemate or insufficient material
-    virtual CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) = 0;
+class KnightMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+};
 
+class BishopMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+};
+
+class RookMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+};
+
+class QueenMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+};
+
+class KingMoveManager : public MoveManager {
+public:
+    CheckType handleMove(bool isPieceWhite, const Move& move, Board& board) override;
+    CheckType handleKingCastle(bool shortSide, bool isPieceWhite, Board& board);
+};
+
+class MoveManagerStore {
+public:
+    ~MoveManagerStore() = default;
+
+    static std::shared_ptr<const MoveManagerStore> getMoveManagerStore();
+
+    inline std::shared_ptr<MoveManager> getPieceMoveManager(Piece piece) const {
+        return m_MoveManagers[(int)piece];
+    }
 private:
+    MoveManagerStore();
 
+    std::shared_ptr<MoveManager> m_MoveManagers[6];
+    static std::shared_ptr<const MoveManagerStore> m_pInstance;
 };
 
-class PawnMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
 };
-
-class KnightMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
-};
-
-class BishopMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
-};
-
-class RookMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
-};
-
-class QueenMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
-};
-
-class KingMoveManager : public IMoveManager {
-public:
-    CheckType handleMove(int fromSquare, int toSquare, int fromRow, int fromCol, int toRow, int toCol, bool isWhite, Board& board) override;
-};
-
-class MoveManagerFactory {
-public:
-    MoveManagerFactory();
-    ~MoveManagerFactory() = default;
-
-    std::shared_ptr<IMoveManager> getMoveManager(char piece);
-
-    static MoveManagerFactory& getReference();
-
-private:
-    std::shared_ptr<IMoveManager> m_PawnManager;
-    std::shared_ptr<IMoveManager> m_KnightManager;
-    std::shared_ptr<IMoveManager> m_BishopManager;
-    std::shared_ptr<IMoveManager> m_RookManager;
-    std::shared_ptr<IMoveManager> m_QueenManager;
-    std::shared_ptr<IMoveManager> m_KingManager;
-};
-
-}
 
 #endif

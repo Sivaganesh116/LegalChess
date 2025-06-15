@@ -1,5 +1,5 @@
-#ifndef __LegalChess_h__
-#define __LegalChess_h__
+#ifndef __LEGAL_CHESS_H__
+#define __LEGAL_CHESS_H__
 
 #include "Board.h"
 

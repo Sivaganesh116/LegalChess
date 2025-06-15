@@ -2,12 +2,14 @@
 
 namespace LC {
 
+std::shared_ptr<const Zobrist> Zobrist::m_pInstance = nullptr;
+
 Zobrist::Zobrist() {
     initRandomKeys();
 }
 
 std::shared_ptr<const Zobrist> Zobrist::getInstance() {
-    if(m_pInstance == nullptr) return m_pInstance = std::make_shared<const Zobrist>();
+    if(m_pInstance == nullptr) return m_pInstance = std::shared_ptr<const Zobrist>(new Zobrist());
 
     return m_pInstance;
 }

@@ -722,6 +722,8 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
 
         finalAttacks |= kingAttackSquares[kingSquare];
     }
+
+    return finalAttacks;
 }
 
 bool isKingUnderCheck(bool white, const Board& board) {
@@ -894,7 +896,7 @@ bool isKingInSameRay(int pieceSquare, int kingSquare, int newKingSquare, Piece a
 void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTurn, Board& board) {
     // draw by repitition 
     if(board.positionHashToFreq[positionHash] == 3) {
-        board.result = 'd';
+        board.setGameResult(GameResult::DRAW_BY_REPITITION);
         board.drawByRepitition = true;
         return;
     }
@@ -921,7 +923,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
         if((board.getPieceBitBoard(Piece::WHITE_PAWN) | board.getPieceBitBoard(Piece::BLACK_PAWN) | board.getPieceBitBoard(Piece::WHITE_ROOK) | board.getPieceBitBoard(Piece::BLACK_ROOK) | board.getPieceBitBoard(Piece::WHITE_QUEEN) | board.getPieceBitBoard(Piece::BLACK_QUEEN)) == 0) {
             if((__builtin_popcountll(board.getPieceBitBoard(Piece::BLACK_BISHOP) | board.getPieceBitBoard(Piece::BLACK_KNIGHT)) <= 1 && __builtin_popcountll(board.getPieceBitBoard(Piece::WHITE_BISHOP) | board.getPieceBitBoard(Piece::WHITE_KNIGHT)) == 0) || 
                 __builtin_popcountll(board.getPieceBitBoard(Piece::BLACK_BISHOP) | board.getPieceBitBoard(Piece::BLACK_KNIGHT)) == 0 && __builtin_popcountll(board.getPieceBitBoard(Piece::WHITE_BISHOP) | board.getPieceBitBoard(Piece::WHITE_KNIGHT)) <= 1) {
-                board.result = 'd';
+                board.setGameResult(GameResult::DRAW_BY_INSUFFICIENT_MATERIAL);
                 board.drawByInsufficientMaterial = true;
                 return;
             }
@@ -937,7 +939,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
                 
                 // if both bishops are of same color (if rank1 is even and file1 is even and rank2 and file2 are both odd, then the two squares are of same color || (if rank1 is odd and file 1 is even and square 2 has same or square2 has opposite parity) or viceversa) )
                 if(res1 == 2 || res1 == 0) {
-                    board.result = 'd';
+                    board.setGameResult(GameResult::DRAW_BY_INSUFFICIENT_MATERIAL);
                     board.drawByInsufficientMaterial = true;
                     return;
                 }
@@ -962,14 +964,14 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
 
         if(!canAnyPieceMove(!isWhiteTurn, board)) {
             board.stalemate = true;
-            board.result = 'd';
+            board.setGameResult(GameResult::STALEMATE);
             return;    
         }
 
         // check for 50 move rule
         if(board.halfMovesCount == 100) {
             board.drawBy50HalfMoves = true;
-            board.result = 'd';
+            board.setGameResult(GameResult::DRAW_BY_50_HALF_MOVES);
         }
     } 
 
@@ -996,7 +998,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     // he can't escape
     if(check == CheckType::DOUBLE_CHECK) {
         if(isWhiteTurn) board.blackKingCheckmated = true;
-        board.result = isWhiteTurn ? 'w' : 'b';
+        board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
         return;
     }
 
@@ -1008,7 +1010,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     // if checking piece is a knight, killing it is the only way to prevent checkmate
     if((int)checkingPiece % 6 == 1 && ((1ULL << checkingPieceSquare) & defenderLegalMoves) == 0) {
         if(isWhiteTurn) board.blackKingCheckmated = true;
-        board.result = isWhiteTurn ? 'w' : 'b';
+        board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
         return;
     }
 
@@ -1018,14 +1020,14 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
 
     if((defenderLegalMoves & kingToCheckingPieceMask) == 0) {
         if(isWhiteTurn) board.blackKingCheckmated = true;
-        board.result = isWhiteTurn ? 'w' : 'b';
+        board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
         return;
     }
 
     // check for 50 move rule
     if(board.halfMovesCount == 100) {
         board.drawBy50HalfMoves = true;
-        board.result = 'd';
+        board.setGameResult(GameResult::DRAW_BY_50_HALF_MOVES);
         return;
     }
 }

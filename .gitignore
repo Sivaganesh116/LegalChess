@@ -1,3 +1,5 @@
 .vscode
 build/
 libLegalChess.a
+bin
+main.cpp

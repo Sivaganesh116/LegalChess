@@ -1,110 +1,267 @@
-#ifndef __Board_h__
-#define __Board_h__
+#ifndef __BOARD_H__
+#define __BOARD_H__
 
-
-#include "Precompute.h"
-#include "ZobristHash.h"
-#include "MoveManager.h"
-
-
-#include <cstdint>
-#include <cmath>
 #include <string>
-#include <stdexcept>
+#include <vector>
+#include <cstdint>
+#include <unordered_map>
 #include <memory>
 
-#define EMPTY '.'
-
-#define WHITE_PAWN 'P'
-#define WHITE_KNIGHT 'N'
-#define WHITE_BISHOP 'B'
-#define WHITE_ROOK 'R'
-#define WHITE_QUEEN 'Q'
-#define WHITE_KING 'K'
-
-#define BLACK_PAWN 'p'
-#define BLACK_KNIGHT 'n'
-#define BLACK_BISHOP 'b'
-#define BLACK_ROOK 'r'
-#define BLACK_QUEEN 'q'
-#define BLACK_KING 'k'
+#include "MoveManager.h"
+#include "Zobrist.h"
 
 namespace LC {
 
-class IMoveManager;
-class MoveManagerFactory;
+class MoveManager;
+class MoveManagerStore;
+class Zobrist;
 
-enum CheckType {
+class PlayerTurnException : public std::runtime_error {
+public:
+    PlayerTurnException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class EmptySquareException : public std::runtime_error {
+public:
+    EmptySquareException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class InvalidMovePatternException : public std::runtime_error {
+public:
+    InvalidMovePatternException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class BlockedMoveException : public std::runtime_error {
+public:
+    BlockedMoveException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class KingUnderCheckException : public std::runtime_error {
+public:
+    KingUnderCheckException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class GameOverException : public std::runtime_error {
+public:
+    GameOverException(std::string msg) : std::runtime_error(msg) {}
+};
+
+class KingCastleException : public std::runtime_error {
+public:
+    KingCastleException(std::string msg) : std::runtime_error(msg) {}
+};
+
+struct Move {
+    int fromRow;
+    int fromCol;
+    int toRow;
+    int toCol;
+    int fromSquare;
+    int toSquare;
+    std::string_view uciMove;
+
+    Move(int fr, int fc, int tr, int tc, int fs, int ts, std::string_view um) {
+        fromRow = fr;
+        fromCol = fc;
+        toRow = tr;
+        toCol = tc;
+        fromSquare = fs;
+        toSquare = ts;
+        uciMove = um;
+    }
+};
+
+enum class Piece {
+    WHITE_PAWN, 
+    WHITE_KNIGHT,
+    WHITE_BISHOP,
+    WHITE_ROOK,
+    WHITE_QUEEN,
+    WHITE_KING,
+    BLACK_PAWN,
+    BLACK_KNIGHT,
+    BLACK_BISHOP,
+    BLACK_ROOK,
+    BLACK_QUEEN,
+    BLACK_KING,
+    EMPTY
+};
+
+enum class CheckType {
     NO_CHECK,
     DIRECT_CHECK,
-    DISCOVERED_CHECK,
+    DISCOVERY_CHECK,
     DOUBLE_CHECK
 };
 
-
-class LegalChessError : public std::runtime_error {
-public:
-    explicit LegalChessError(const std::string& msg) : std::runtime_error(msg) {}; 
+enum class GameResult {
+    IN_PROGRESS,
+    WHITE_WON_BY_CHECKMATE,
+    BLACK_WON_BY_CHECKMATE,
+    STALEMATE,
+    DRAW_BY_REPITITION,
+    DRAW_BY_INSUFFICIENT_MATERIAL,
+    DRAW_BY_50_HALF_MOVES
 };
 
-
-bool isPieceWhite(char piece) {
-    return piece >= 'B' && piece <= 'R';
-}
-
+extern const char* gameResultToString[7];
 
 class Board {
 public:
-    uint64_t whitePawns, whiteKnights, whiteBishops, whiteRooks, whiteQueens, whiteKing;
-    uint64_t blackPawns, blackKnights, blackBishops, blackRooks, blackQueens, blackKing;
+    Board();
+    ~Board() = default;
 
-    uint64_t allPieces;
+    void move(const Move&);
+    void promote(Piece newPiece, const Move&);
+    
+    
+    inline void updatePieceMoveOnBoard(Piece piece, int fromSquare, int toSquare) {
+        int pieceIndex = (int)piece;
 
-    char grid[8][8];
+        uint64_t& colorBoard = pieceIndex < 6 ? allWhitePiecesBoard : allBlackPiecesBoard;
+        uint64_t& pieceBoard = piecesArray[pieceIndex];
 
-    uint8_t enpassantSquare = 64, moveNumber = 0, movesWithoutCaptureAndPawns = 0;
+        // remove piece on all boards from fromSquare
+        colorBoard &= ~(1ULL << fromSquare);
+        pieceBoard &= ~(1ULL << fromSquare);
+        allPiecesBoard &= ~(1ULL << fromSquare);
 
-    bool canWhiteKingShortCastle, canBlackKingShortCastle, canWhiteKingLongCastle, canBlackKingLongCastle;
+        // add piece on all boards to toSquare
+        colorBoard |= (1ULL << toSquare);
+        pieceBoard |= (1ULL << toSquare);
+        allPiecesBoard |= (1ULL << toSquare);   
+    }
 
-    bool isCheckMate, isStalemate, isDrawByInsufficientMaterial, isDrawByRepitition, isDrawBy50MoveRule;
+    inline void updatePieceCountOnBoard(Piece piece, int square, bool inc) {
+        int pieceIndex = (int)piece;
 
-    int8_t m_discoveryCheckSquare;
+        uint64_t& colorBoard = pieceIndex < 6 ? allWhitePiecesBoard : allBlackPiecesBoard;
+        uint64_t& pieceBoard = piecesArray[pieceIndex];
 
+        if(inc) {
+            // add piece on all boards to square
+            colorBoard |= (1ULL << square);
+            pieceBoard |= (1ULL << square);
+            allPiecesBoard |= (1ULL << square);  
+        }
+        else {
+            // remove piece on all boards from square
+            colorBoard &= ~(1ULL << square);
+            pieceBoard &= ~(1ULL << square);
+            allPiecesBoard &= ~(1ULL << square);
+        }
+    }
+        
+    inline uint64_t getPieceBitBoard(Piece piece) const {
+        return piecesArray[(int)piece];
+    }
+
+    inline uint64_t getColorBitBoard(bool white) const {
+        return white ? allWhitePiecesBoard : allBlackPiecesBoard;
+    }
+
+    inline uint64_t getAllPiecesBitBoard() const {
+        return allPiecesBoard;
+    }
+
+    inline Piece getPieceOnBoard(int square) const {
+        return grid[square/8][square%8];
+    }
+
+    inline void updateDiscoveryCheckSquare(int square) {
+        discoveryCheckSquare = square;
+    }
+
+    inline void updateDirectCheckSquare(int square) {
+        directCheckSquare = square;
+    }
+
+    inline bool isGameOver() const {
+        return gameResult != GameResult::IN_PROGRESS;
+    }
+
+    inline bool isCheckmate(bool white) const {
+        return white ? whiteKingCheckmated : blackKingCheckmated;
+    }
+
+    inline bool isStalemate() const {
+        return stalemate;
+    }
+
+    inline bool isDrawByRepitition() const {
+        return drawByRepitition;
+    }
+
+    inline bool isDrawBy50HalfMoves() const {
+        return drawBy50HalfMoves;
+    }
+
+    inline bool isDrawyByInsufficientMaterial() const {
+        return drawByInsufficientMaterial;
+    }
+
+    inline std::vector<std::vector<char>> getBoard() const {
+        std::vector<std::vector<char>> board(8, std::vector<char>(8));
+
+        for(int i = 0; i<8; i++) {
+            for(int j = 0; j<8; j++) {
+                // board[i][j] = grid[i][j]; To-Do
+            }
+        }
+
+        return board;
+    }
+
+    inline std::string getMoveHistory() const {
+        return moveHistory;
+    }
+
+    inline void setPieceOnBoard(Piece piece, int square) {
+        grid[square/8][square%8] = piece;
+    }
+
+    inline int getMoveNumber() {
+        return movesCount;
+    }
+
+    inline GameResult getGameResult() const {
+        return gameResult;
+    }
+
+    inline void setGameResult(GameResult result) {
+        gameResult = result;
+    }
+
+    bool isKingUnderCheck(bool white) const;
+
+    std::string getFENString() const;
+
+
+    // member variables
+    std::unordered_map<uint64_t, uint16_t> positionHashToFreq;
     bool isWhiteTurn;
-    char result;
-    bool whiteKingMoved, blackKingMoved;
+    bool canWhiteKingShortCastle, canWhiteKingLongCastle, canBlackKingShortCastle, canBlackKingLongCastle;
+    bool gameOver, whiteKingCheckmated, blackKingCheckmated, stalemate, drawByRepitition, drawBy50HalfMoves, drawByInsufficientMaterial;
 
-    std::unordered_map<uint64_t, int8_t> positionToFreq;
-
-    Board(MoveManagerFactory&);
-
-    void addMoveToHistory(std::string move);
-
-    void move(int fromRow, int fromCol, int toRow, int toCol, int fromSquare, int toSquare);
-
-    void promote(char newPiece, int fromRow, int fromCol, int toRow, int toCol, int fromSquare, int toSquare);
-
-    void updateBlackPieceCount(char piece, bool inc, int square);
-
-    void updateWhitePieceCount(char piece, bool inc, int square);
-
-    void calculateMoveResult(char piece, int toSquare, CheckType check, uint64_t position);
-
-    bool isChecked(bool white);
-
-    std::string getFENString();
-
-    std::vector<std::vector<char>> getBoard(); 
-
-    std::string moveHistory;
+    uint16_t enpassantSquare, discoveryCheckSquare, directCheckSquare;
+    uint16_t halfMovesCount, movesCount; // they treat each player's turn as different moves
+    
+    GameResult gameResult;
 
 private:
-    uint64_t& getPieceBitBoard(char piece);
-    std::unique_ptr<Zobrist> m_pZobrist;
-    MoveManagerFactory& m_rMoveManagerFactory;
+    void initBoard();
+
+    uint64_t piecesArray[12];
+    uint64_t allWhitePiecesBoard, allBlackPiecesBoard, allPiecesBoard;
+
+    Piece grid[8][8];
+    std::string moveHistory;
+
+    std::shared_ptr<const MoveManagerStore> m_pMoveManagerStore;
+    std::shared_ptr<const Zobrist> m_pZobrist;
 };
 
-}
 
+};
 
 #endif
