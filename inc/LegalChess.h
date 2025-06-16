@@ -96,6 +96,10 @@ public:
         return m_pBoard->getGameResult();
     }
 
+    bool doesColorHaveInsufficientMaterial(bool white) {
+        return m_pBoard->doesColorHaveInsufficientMaterial(white);
+    }
+
     std::string getFENString() {
         return m_pBoard->getFENString();
     }
