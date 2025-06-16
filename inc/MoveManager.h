@@ -5,7 +5,7 @@
 
 namespace LC {
 
-class Move;
+struct Move;
 class Board;
 enum class CheckType;
 enum class Piece;
@@ -54,7 +54,7 @@ public:
     static std::shared_ptr<const MoveManagerStore> getMoveManagerStore();
 
     inline std::shared_ptr<MoveManager> getPieceMoveManager(Piece piece) const {
-        return m_MoveManagers[(int)piece];
+        return m_MoveManagers[(int)piece % 6];
     }
 private:
     MoveManagerStore();

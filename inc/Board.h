@@ -9,12 +9,18 @@
 
 #include "MoveManager.h"
 #include "Zobrist.h"
+#include "Helper.h"
 
 namespace LC {
 
 class MoveManager;
 class MoveManagerStore;
 class Zobrist;
+
+class InvalidMoveException : public std::runtime_error {
+public:
+    InvalidMoveException(std::string msg) : std::runtime_error(msg) {}
+};
 
 class PlayerTurnException : public std::runtime_error {
 public:
@@ -60,6 +66,10 @@ struct Move {
     int toSquare;
     std::string_view uciMove;
 
+    Move() {
+        
+    }
+
     Move(int fr, int fc, int tr, int tc, int fs, int ts, std::string_view um) {
         fromRow = fr;
         fromCol = fc;
@@ -104,7 +114,8 @@ enum class GameResult {
     DRAW_BY_50_HALF_MOVES
 };
 
-extern const char* gameResultToString[7];
+extern const char* const gameResultToString[7];
+extern char const pieceToChar[13];
 
 class Board {
 public:
@@ -112,7 +123,7 @@ public:
     ~Board() = default;
 
     void move(const Move&);
-    void promote(Piece newPiece, const Move&);
+    void promote(char choosenPiece, const Move&);
     
     
     inline void updatePieceMoveOnBoard(Piece piece, int fromSquare, int toSquare) {
@@ -205,7 +216,7 @@ public:
 
         for(int i = 0; i<8; i++) {
             for(int j = 0; j<8; j++) {
-                // board[i][j] = grid[i][j]; To-Do
+                board[i][j] = pieceToChar[(int)grid[i][j]];
             }
         }
 
@@ -214,6 +225,11 @@ public:
 
     inline std::string getMoveHistory() const {
         return moveHistory;
+    }
+
+    inline void addMoveToHistory(std::string move) {
+        if(moveHistory.length() != 0) moveHistory.push_back(' ');
+        moveHistory += move;
     }
 
     inline void setPieceOnBoard(Piece piece, int square) {
@@ -231,6 +247,8 @@ public:
     inline void setGameResult(GameResult result) {
         gameResult = result;
     }
+
+    bool doesColorHaveInsufficientMaterial(bool white);
 
     bool isKingUnderCheck(bool white) const;
 

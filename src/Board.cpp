@@ -3,7 +3,8 @@
 
 namespace LC {
 
-const char* gameResultToString[7] = {"Game_In_Progress", "White_Won_By_Checkmate", "Black_Won_By_Checkmate", "Stalemate", "Draw_By_Repitition", "Draw_By_Insufficient_Material", "Draw_By_50_Half_Moves"};
+const char* const gameResultToString[7] = {"Game_In_Progress", "White_Won_By_Checkmate", "Black_Won_By_Checkmate", "Stalemate", "Draw_By_Repitition", "Draw_By_Insufficient_Material", "Draw_By_50_Half_Moves"};
+char const pieceToChar[13] = {'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k', '.'};
 
 class MoveManagerStore;
 
@@ -30,6 +31,7 @@ void Board::initBoard() {
     piecesArray[10] = (piecesArray[4] << 56); // Queens
     piecesArray[11] = (piecesArray[5] << 56); // King
 
+    allPiecesBoard = allWhitePiecesBoard = allBlackPiecesBoard = 0;
 
     for(int i = 0; i<12; i++) {
         uint64_t pieces = piecesArray[i];
@@ -41,7 +43,7 @@ void Board::initBoard() {
 
     // WhitePieces
     // Pawn Row
-    for(auto &piece : grid[6]) piece = Piece::WHITE_PAWN;
+    for(auto &piece : grid[1]) piece = Piece::WHITE_PAWN;
 
     // King Row
     grid[0][0] = grid[0][7] = Piece::WHITE_ROOK;
@@ -59,7 +61,7 @@ void Board::initBoard() {
     grid[7][4] = Piece::BLACK_QUEEN;
 
     // Pawn Row
-    for(auto &piece : grid[1]) piece = Piece::EMPTY;
+    for(auto &piece : grid[6]) piece = Piece::BLACK_PAWN;
 
 
     // fill empty squares
@@ -120,11 +122,17 @@ void Board::move(const Move& move) {
 
     calculateMoveResult(check, positionHash, isWhiteTurn, *this);
 
+    // check for 50 move rule
+    if(halfMovesCount == 100 && gameResult == GameResult::IN_PROGRESS) {
+        drawBy50HalfMoves = true;
+        setGameResult(GameResult::DRAW_BY_50_HALF_MOVES);
+    }
+
     isWhiteTurn = !isWhiteTurn;    
 }
 
 
-void Board::promote(Piece newPiece, const Move& move) {
+void Board::promote(char choosenPiece, const Move& move) {
     Piece movingPiece = grid[move.fromRow][move.fromCol];
 
     if(movingPiece == Piece::EMPTY || (movingPiece != Piece::WHITE_PAWN && movingPiece != Piece::BLACK_PAWN)) {
@@ -138,6 +146,13 @@ void Board::promote(Piece newPiece, const Move& move) {
         throw PlayerTurnException("It is " + std::string(isWhiteTurn ? "white's " : "black's ") + " turn to move. Move number: " + std::to_string(movesCount + 1) + ". Move: " + std::string(move.uciMove));
     }
 
+    Piece newPiece;
+
+    if(choosenPiece == 'q') newPiece = isWhiteTurn ? Piece::WHITE_QUEEN : Piece::BLACK_QUEEN;
+    else if(choosenPiece == 'r') newPiece = isWhiteTurn ? Piece::WHITE_ROOK : Piece::BLACK_ROOK;
+    else if(choosenPiece == 'b') newPiece = isWhiteTurn ? Piece::WHITE_BISHOP : Piece::BLACK_BISHOP;
+    else if(choosenPiece == 'n') newPiece = isWhiteTurn ? Piece::WHITE_KNIGHT : Piece::BLACK_KNIGHT;
+    else throw InvalidMoveException("The provied piece to promote is invalid: " + std::string(1, choosenPiece) + ". Move number: " + std::to_string(movesCount + 1) + ". Move: " + std::string(move.uciMove));
 
     CheckType check = std::static_pointer_cast<PawnMoveManager>(m_pMoveManagerStore->getPieceMoveManager(movingPiece))->handlePromotion(newPiece, isWhiteTurn, move, *this);
 
@@ -164,8 +179,11 @@ void Board::promote(Piece newPiece, const Move& move) {
     halfMovesCount = 0;
 }
 
+bool Board::doesColorHaveInsufficientMaterial(bool white) {
+    return LC::doesColorHaveInsufficientMaterial(white, *this);
+}
+
 bool Board::isKingUnderCheck(bool white) const {
-    // To-do
     return LC::isKingUnderCheck(white, *this);
 }
 
@@ -179,7 +197,7 @@ std::string Board::getFENString() const {
             if(grid[i][j] == Piece::EMPTY) emptyCount++;
             else {
                 if(emptyCount) fenString.push_back('0' + emptyCount);
-                // fenString.push_back(grid[i][j]); To-do
+                fenString.push_back(pieceToChar[(int)grid[i][j]]);
             }
         }
 

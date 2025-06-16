@@ -56,19 +56,21 @@ CheckType PawnMoveManager::handlePromotion(Piece newPiece, bool isPieceWhite, co
     else if(newPiece == Piece::WHITE_ROOK || newPiece == Piece::BLACK_ROOK) pieceAttacks = getRookAttacksForSquareAndOccupancy(move.toSquare, board.getAllPiecesBitBoard());
 
 
+    CheckType check = CheckType::NO_CHECK;
+
     // Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = move.toSquare;
 
-        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-            return CheckType::DOUBLE_CHECK;
-        }
-
-        return CheckType::DIRECT_CHECK;
+        check = CheckType::DIRECT_CHECK;
     }
 
-    return CheckType::NO_CHECK;
+    if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+        check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+    }
+
+    return check;
 }
 
 CheckType PawnMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
@@ -87,18 +89,19 @@ CheckType PawnMoveManager::handleMove(bool isPieceWhite, const Move& move, Board
     pathMask &= ~(1ULL << move.toSquare);
 
     // if capture
-    if(move.fromCol != move.toCol && capturedPiece == Piece::EMPTY) {
+    if(move.fromCol != move.toCol && (capturedPiece == Piece::EMPTY && move.toSquare != board.enpassantSquare)) {
         // throw error
         throw InvalidMovePatternException("Invalid move pattern for a pawn. New square doesn't have an opponent piece to capture. Move number: " + std::to_string(board.getMoveNumber() + 1) + std::string(". Move: ") + std::string(move.uciMove));
     }
 
-    if((pathMask & board.getAllPiecesBitBoard()) != 0 || capturedPiece != Piece::EMPTY && isPieceWhite == (int)capturedPiece < 6) {
+    if((pathMask & board.getAllPiecesBitBoard()) != 0 || (capturedPiece != Piece::EMPTY && isPieceWhite == (int)capturedPiece < 6)) {
         // throw error
         throw BlockedMoveException("The pawn is blocked. Move number: " + std::to_string(board.getMoveNumber() + 1) + std::string(". Move: ") + std::string(move.uciMove));
     }
 
     // if capture, update the captured piece on board (don't have check for the validity of toSquare as it is taken care in board.move())
     if(capturedPiece != Piece::EMPTY) board.updatePieceCountOnBoard(capturedPiece, move.toSquare, false);
+    if(move.toSquare == board.enpassantSquare) board.updatePieceCountOnBoard(isPieceWhite ? Piece::BLACK_PAWN : Piece::WHITE_PAWN, move.fromRow*8 + move.toCol, false);
 
     // update the move on board
     board.updatePieceMoveOnBoard(movedPiece, move.fromSquare, move.toSquare);
@@ -106,6 +109,8 @@ CheckType PawnMoveManager::handleMove(bool isPieceWhite, const Move& move, Board
 
     if(isKingUnderCheck(isPieceWhite, board)) { // is my king under check after my move is made
         // undo the move
+        if(move.toSquare == board.enpassantSquare) board.updatePieceCountOnBoard(isPieceWhite ? Piece::BLACK_PAWN : Piece::WHITE_PAWN, move.fromRow*8 + move.toCol, true);
+
         board.updatePieceMoveOnBoard(movedPiece, move.toSquare, move.fromSquare);
 
         if(capturedPiece != Piece::EMPTY) board.updatePieceCountOnBoard(capturedPiece, move.toSquare, true);
@@ -118,6 +123,10 @@ CheckType PawnMoveManager::handleMove(bool isPieceWhite, const Move& move, Board
     if(abs(move.fromRow - move.toRow) == 2) {
         board.enpassantSquare = isPieceWhite ? move.fromSquare + 8 : move.fromSquare - 8;
     }
+    else if(move.toSquare == board.enpassantSquare) {
+        // update grid
+        board.setPieceOnBoard(Piece::EMPTY, move.fromSquare*8 + move.toCol);
+    }
 
     uint64_t pieceAttacks = 0; 
 
@@ -125,19 +134,21 @@ CheckType PawnMoveManager::handleMove(bool isPieceWhite, const Move& move, Board
     if(move.fromCol > 0) pieceAttacks |= (1ULL << (newRank*8 + move.fromCol - 1));
     if(move.fromCol < 7) pieceAttacks |= (1ULL << (newRank*8 + move.fromCol + 1));
 
+    CheckType check = CheckType::NO_CHECK;
+
     // Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = move.toSquare;
 
-        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-            return CheckType::DOUBLE_CHECK;
-        }
-
-        return CheckType::DIRECT_CHECK;
+        check = CheckType::DIRECT_CHECK;
     }
 
-    return CheckType::NO_CHECK;
+    if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+        check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+    }
+
+    return check;
 }
 
 CheckType KnightMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
@@ -170,19 +181,21 @@ CheckType KnightMoveManager::handleMove(bool isPieceWhite, const Move& move, Boa
 
         uint64_t pieceAttacks = knightAttackSquares[move.toSquare];
 
+        CheckType check = CheckType::NO_CHECK;
+
         // Return the check type the move results in
-        if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING))) != 0) { // if the new piece directly checks the opponent king
+        if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
             // update the direct check square
             board.directCheckSquare = move.toSquare;
 
-            if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-                return CheckType::DOUBLE_CHECK;
-            }
-
-            return CheckType::DIRECT_CHECK;
+            check = CheckType::DIRECT_CHECK;
         }
 
-        return CheckType::NO_CHECK;
+        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+            check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+        }
+
+        return check;
     }
 
     // throw error
@@ -191,7 +204,7 @@ CheckType KnightMoveManager::handleMove(bool isPieceWhite, const Move& move, Boa
 
 CheckType BishopMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
     // check move pattern
-    if(abs(move.fromRow - move.fromCol) != abs(move.toRow - move.toCol)) {
+    if(abs(move.fromRow - move.toRow) != abs(move.fromCol - move.toCol)) {
         // throw error
         throw InvalidMovePatternException("Invalid move pattern for a bishop. Move number: " + std::to_string(board.getMoveNumber() + 1) + std::string(". Move: ") + std::string(move.uciMove)); 
     }
@@ -204,7 +217,7 @@ CheckType BishopMoveManager::handleMove(bool isPieceWhite, const Move& move, Boa
     pathMask &= ~(1ULL << move.fromSquare);
     pathMask &= ~(1ULL << move.toSquare);
 
-    if((pathMask & board.getAllPiecesBitBoard()) != 0 || (capturedPiece != Piece::EMPTY && isPieceWhite == (int)capturedPiece < 6)) {
+    if((pathMask & board.getAllPiecesBitBoard()) != 0 || (capturedPiece != Piece::EMPTY && isPieceWhite == ((int)capturedPiece) < 6)) {
         // throw error
         throw BlockedMoveException("The bishop is blocked. Move number: " + std::to_string(board.getMoveNumber() + 1) + std::string(". Move: ") + std::string(move.uciMove));
     }
@@ -229,19 +242,21 @@ CheckType BishopMoveManager::handleMove(bool isPieceWhite, const Move& move, Boa
 
     uint64_t pieceAttacks = getBishopAttacksForSquareAndOccupancy(move.toSquare, board.getAllPiecesBitBoard());
 
+    CheckType check = CheckType::NO_CHECK;
+
     // Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = move.toSquare;
 
-        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-            return CheckType::DOUBLE_CHECK;
-        }
-
-        return CheckType::DIRECT_CHECK;
+        check = CheckType::DIRECT_CHECK;
     }
 
-    return CheckType::NO_CHECK;
+    if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+        check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+    }
+
+    return check;
 }
 
 CheckType RookMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
@@ -291,19 +306,21 @@ CheckType RookMoveManager::handleMove(bool isPieceWhite, const Move& move, Board
 
     uint64_t pieceAttacks = getRookAttacksForSquareAndOccupancy(move.toSquare, board.getAllPiecesBitBoard());
 
+    CheckType check = CheckType::NO_CHECK;
+
     // Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = move.toSquare;
 
-        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-            return CheckType::DOUBLE_CHECK;
-        }
-
-        return CheckType::DIRECT_CHECK;
+        check = CheckType::DIRECT_CHECK;
     }
 
-    return CheckType::NO_CHECK;
+    if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+        check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+    }
+
+    return check;
 }
 
 CheckType QueenMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
@@ -344,19 +361,21 @@ CheckType QueenMoveManager::handleMove(bool isPieceWhite, const Move& move, Boar
 
     uint64_t pieceAttacks = getQueenAttacksForSquareAndOccupancy(move.toSquare, board.getAllPiecesBitBoard());
 
+    CheckType check = CheckType::NO_CHECK;
+
     // Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the new piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the new piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = move.toSquare;
 
-        if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
-            return CheckType::DOUBLE_CHECK;
-        }
-
-        return CheckType::DIRECT_CHECK;
+        check = CheckType::DIRECT_CHECK;
     }
 
-    return CheckType::NO_CHECK;
+    if(getPinDirection(!isPieceWhite, move.fromSquare, board, true) != PinDirection::NONE) { // if the move results in discovery check
+        check = check == CheckType::NO_CHECK ? CheckType::DISCOVERY_CHECK : CheckType::DOUBLE_CHECK;
+    }
+
+    return check;
 }
 
 CheckType KingMoveManager::handleMove(bool isPieceWhite, const Move& move, Board& board) {
@@ -443,7 +462,7 @@ CheckType KingMoveManager::handleKingCastle(bool shortSide, bool isPieceWhite, B
 
     // castling can result only in direct checks
     //  Return the check type the move results in
-    if((pieceAttacks & (1ULL << board.getPieceBitBoard(isPieceWhite ? Piece::WHITE_KING : Piece::BLACK_KING)))) { // if the piece directly checks the opponent king
+    if((pieceAttacks & (1ULL << __builtin_ctzll(board.getPieceBitBoard(isPieceWhite ? Piece::BLACK_KING : Piece::WHITE_KING))))) { // if the piece directly checks the opponent king
         // update the direct check square
         board.directCheckSquare = rookToSquare;
 

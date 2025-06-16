@@ -26,7 +26,9 @@ enum class PinDirection {
 };
 
 class Board;
+enum class CheckType;
 
+void compute();
 PinDirection getPinDirection(bool white, int pieceSquare, Board & board, bool updateDiscoveryCheckSquare);
 uint64_t getBishopAttacksForSquareAndOccupancy(int square, uint64_t occupancy);
 uint64_t getRookAttacksForSquareAndOccupancy(int square, uint64_t occupancy);
@@ -36,6 +38,7 @@ bool isKingUnderCheck(bool white, const Board& board);
 bool canAnyPieceMove(bool white, const Board& board);
 bool isKingInSameRay(int pieceSquare, int kingSquare, int newKingSquare, Piece attackingPiece);
 void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTurn, Board& board);
+bool doesColorHaveInsufficientMaterial(bool white, const Board& board);
 
 };
 

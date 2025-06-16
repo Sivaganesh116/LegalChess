@@ -4,7 +4,7 @@
 namespace LC {
 
 static int knightMoveOffsets[8][2] = {{-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1}, {-2, -1}, {-2, 1}};
-static int kingMoveOffsets[8][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}, {1, 1}, {-1, 1}, {1, -1}, {1, 1}};
+static int kingMoveOffsets[8][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
 
 uint64_t knightAttackSquares[64];
 uint64_t bishopAttackSquares[64];
@@ -70,7 +70,7 @@ void compute() {
         while(numSquares--) {
             bottomToTopMask |= (1ULL << bottomToTopSquare);
             rangeMasks[sq][bottomToTopSquare] = rangeMasks[bottomToTopSquare][sq] = bottomToTopMask;
-            bottomToTopMask += 7;
+            bottomToTopSquare += 7;
         }
     }
 
@@ -130,8 +130,11 @@ void compute() {
 
         bishopAttacks |= rangeMasks[bottomLeftSquare][topRightSquare];
 
-        bishopAttackSquares[sq] |= bishopAttacks;
+        bishopAttackSquares[sq] = bishopAttacks;
     }
+
+    // rookAttacksForOccupancy.resize(64);
+    // bishopAttacksForOccupancy.resize(64);
 
     // calculate rook attacks for occupancy
     for(int sq = 0; sq<64; sq++) {
@@ -176,7 +179,7 @@ void compute() {
 
             // right
             legalAttackSquare = sq + 1;
-            while(legalAttackSquare < row*8 + 7) {
+            while(legalAttackSquare <= row*8 + 7) {
                 legalAttacks |= (1ULL << legalAttackSquare);
 
                 if(((1ULL << legalAttackSquare) & occupancyMask) != 0) break;
@@ -205,9 +208,10 @@ void compute() {
             }
 
             // store the legal attacks for square and for occupancy mask
-            rookAttacksForOccupancy[sq][occupancyMask] = legalAttacks;
+            rookAttacksForOccupancy[sq][config] = legalAttacks;
         }
     }
+
 
     // calculate bishop attack for occupancy
     for(int sq = 0; sq < 64; sq++) {
@@ -280,7 +284,7 @@ void compute() {
             int topRightSquare = sq - (7 * std::min(row, 8-col-1));
             newSquare = sq - 7;
 
-            while(newSquare >= topLeftSquare) {
+            while(newSquare >= topRightSquare) {
                 legalAttacks |= (1ULL << newSquare);
 
                 if(((1ULL << newSquare) & occupancyMask) != 0) break;
@@ -288,19 +292,19 @@ void compute() {
                 newSquare -= 7;
             }
 
-            bishopAttacksForOccupancy[sq][occupancyMask] = legalAttacks;
+            bishopAttacksForOccupancy[sq][config] = legalAttacks;
         }
     }
 }
 
-struct PrecomputeInit {
-    PrecomputeInit() {
-        compute();
-    }
-};
+// struct PrecomputeInit {
+//     PrecomputeInit() {
+//         compute();
+//     }
+// };
 
 // Make an object of PrecomputeInit to run it before main
-static PrecomputeInit obj;
+// static PrecomputeInit obj;
 
 
 PinDirection getPinDirection(bool white, int pieceSquare, Board & board, bool updateDiscoveryCheckSquare) {
@@ -408,6 +412,8 @@ PinDirection getPinDirection(bool white, int pieceSquare, Board & board, bool up
         uint64_t attackingQueens = board.getPieceBitBoard(white ? Piece::BLACK_QUEEN : Piece::WHITE_QUEEN);
         uint64_t obstructingPieces = board.getColorBitBoard(white) | 
                                      (board.getColorBitBoard(!white) & ~(attackingRooks | attackingQueens));
+
+        obstructingPieces &= beyondMask;
         
         // OR opponent queens and rooks
         uint64_t attackingPieces = (attackingRooks | attackingQueens);
@@ -455,6 +461,8 @@ PinDirection getPinDirection(bool white, int pieceSquare, Board & board, bool up
         uint64_t obstructingPieces = board.getColorBitBoard(white) | 
                                      (board.getColorBitBoard(!white) & ~(attackingRooks | attackingQueens));
         
+        obstructingPieces &= beyondMask;
+
         // OR opponent queens and rooks
         uint64_t attackingPieces = (attackingRooks | attackingQueens);
         attackingPieces &= beyondMask;
@@ -562,6 +570,7 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
         }
     }
 
+
     // bishops
     uint64_t bishopBoard = board.getPieceBitBoard(white ? Piece::WHITE_BISHOP : Piece::BLACK_BISHOP);
 
@@ -597,6 +606,8 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
         }
     }
 
+
+
     // knights
     uint64_t knightsBoard = board.getPieceBitBoard(white ? Piece::WHITE_KNIGHT : Piece::BLACK_KNIGHT);
 
@@ -606,6 +617,8 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
 
         if(!checkPins || getPinDirection(white, knightSquare, const_cast<Board&>(board), false) == PinDirection::NONE) finalAttacks |= knightAttackSquares[knightSquare];
     }
+
+
 
     // queens
     uint64_t queensBoard = board.getPieceBitBoard(white ? Piece::WHITE_QUEEN : Piece::BLACK_QUEEN);
@@ -650,6 +663,8 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
         }
     }
 
+
+
     // pawns
     uint64_t pawnsBoard = board.getPieceBitBoard(white ? Piece::WHITE_PAWN : Piece::BLACK_PAWN);
 
@@ -668,7 +683,7 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
             
             newFile += 2;
 
-            if(newFile >= 0 && ((1ULL << (newRank*8 + newFile)) & board.getColorBitBoard(!white)) != 0) rightFileAttack |= (1ULL << (newRank*8 + newFile));
+            if(newFile < 8 && ((1ULL << (newRank*8 + newFile)) & board.getColorBitBoard(!white)) != 0) rightFileAttack |= (1ULL << (newRank*8 + newFile));
 
             // normal move, first step
             int oneStepSquare = white ? pawnSquare + 8 : pawnSquare - 8;
@@ -684,8 +699,8 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
                 PinDirection direction = getPinDirection(white, pawnSquare, const_cast<Board&>(board), false);
 
                 if(direction == PinDirection::NONE) finalAttacks |= (leftFileAttack | rightFileAttack | steps);
-                else if(direction == PinDirection::BOTTOM_TOP_DIAG) finalAttacks |= leftFileAttack;
-                else if(direction == PinDirection::TOP_BOTTOM_DIAG) finalAttacks |= rightFileAttack;
+                else if(direction == PinDirection::BOTTOM_TOP_DIAG) finalAttacks |= (white ?  leftFileAttack : rightFileAttack);
+                else if(direction == PinDirection::TOP_BOTTOM_DIAG) finalAttacks |= (white ? rightFileAttack : leftFileAttack);
             }
             else finalAttacks |= (leftFileAttack | rightFileAttack | steps);
         }
@@ -695,24 +710,26 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
 
             uint64_t leftFileAttack = 0, rightFileAttack = 0;
 
-            int newFile = pawnSquare % 8 - 1;
+            int newFile = (pawnSquare % 8) - 1;
             
             if(newFile >= 0) leftFileAttack |= (1ULL << (newRank*8 + newFile));
             
             newFile += 2;
 
-            if(newFile >= 0) rightFileAttack |= (1ULL << (newRank*8 + newFile));
+            if(newFile < 8) rightFileAttack |= (1ULL << (newRank*8 + newFile));
 
             if(checkPins) {
                 PinDirection direction = getPinDirection(white, pawnSquare, const_cast<Board&>(board), false);
 
                 if(direction == PinDirection::NONE) finalAttacks |= (leftFileAttack | rightFileAttack);
-                else if(direction == PinDirection::BOTTOM_TOP_DIAG) finalAttacks |= leftFileAttack;
-                else if(direction == PinDirection::TOP_BOTTOM_DIAG) finalAttacks |= rightFileAttack;
+                else if(direction == PinDirection::BOTTOM_TOP_DIAG) finalAttacks |= (white ?  leftFileAttack : rightFileAttack);
+                else if(direction == PinDirection::TOP_BOTTOM_DIAG) finalAttacks |= (white ? rightFileAttack : leftFileAttack);
             }
             else finalAttacks |= (leftFileAttack | rightFileAttack);
         }
     }
+
+
 
     // king
     if(includeKing) {
@@ -723,14 +740,16 @@ uint64_t generateLegalAttacksForColor(bool white, bool checkPins, bool includeKi
         finalAttacks |= kingAttackSquares[kingSquare];
     }
 
+
+    
     return finalAttacks;
 }
 
 bool isKingUnderCheck(bool white, const Board& board) {
-    uint64_t opponentAttacks = generateLegalAttacksForColor(!white, false, false, true, board);
-    uint64_t kingSquare = (1ULL << board.getPieceBitBoard(white ? Piece::WHITE_KING : Piece::BLACK_KING));
+    uint64_t opponentAttacks = generateLegalAttacksForColor(!white, false, true, false, board);
+    int kingSquare = __builtin_ctzll(board.getPieceBitBoard(white ? Piece::WHITE_KING : Piece::BLACK_KING));
 
-    return (kingSquare & opponentAttacks) != 0;
+    return (((1ULL << kingSquare) & opponentAttacks) != 0);
 }
 
 bool canAnyPieceMove(bool white, const Board& board) {
@@ -885,6 +904,7 @@ bool canAnyPieceMove(bool white, const Board& board) {
 
 bool isKingInSameRay(int pieceSquare, int kingSquare, int newKingSquare, Piece attackingPiece) {
     if((int)attackingPiece % 6 <= 1) return false;
+    if(newKingSquare == pieceSquare) return false;
 
     int rank1 = pieceSquare/8, rank2 = kingSquare/8, rank3 = newKingSquare/8;
     int file1 = pieceSquare%8, file2 = kingSquare%8, file3 = newKingSquare%8;
@@ -902,7 +922,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     }
 
     // opponentKingPosition
-    int oppKingSquare = __builtin_ctzll(board.getPieceBitBoard(isWhiteTurn ? Piece::WHITE_KING : Piece::BLACK_KING));
+    int oppKingSquare = __builtin_ctzll(board.getPieceBitBoard(isWhiteTurn ? Piece::BLACK_KING : Piece::WHITE_KING));
     int oppKingRank = oppKingSquare / 8, oppKingFile = oppKingSquare % 8;
 
     int myKingSquare = board.getPieceBitBoard(isWhiteTurn ? Piece::WHITE_KING : Piece::BLACK_KING);
@@ -950,7 +970,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
         // find if it is stalemate
         // iterate all possible king squares
         for(auto & offSets : kingMoveOffsets) {
-            int8_t newRank = oppKingRank + offSets[0], newFile = oppKingRank + offSets[1];
+            int8_t newRank = oppKingRank + offSets[0], newFile = oppKingFile + offSets[1];
 
             if(newRank >= 0 && newRank < 8 && newFile >= 0 && newFile < 8) {
                 int newSquare = newRank*8 + newFile;
@@ -968,12 +988,9 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
             return;    
         }
 
-        // check for 50 move rule
-        if(board.halfMovesCount == 100) {
-            board.drawBy50HalfMoves = true;
-            board.setGameResult(GameResult::DRAW_BY_50_HALF_MOVES);
-        }
+        return;
     } 
+
 
     Piece directCheckingPiece = (check == CheckType::DIRECT_CHECK || check == CheckType::DOUBLE_CHECK ? board.getPieceOnBoard(board.directCheckSquare) : Piece::EMPTY);
     Piece discoveryCheckingPiece = (check == CheckType::DISCOVERY_CHECK || check == CheckType::DOUBLE_CHECK ? board.getPieceOnBoard(board.discoveryCheckSquare) : Piece::EMPTY);
@@ -981,7 +998,7 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     // opponent king is under check
     // first see if he can escape
     for(auto & offSets : kingMoveOffsets) {
-        int8_t newRank = oppKingRank + offSets[0], newFile = oppKingRank + offSets[1];
+        int8_t newRank = oppKingRank + offSets[0], newFile = oppKingFile + offSets[1];
 
         if(newRank >= 0 && newRank < 8 && newFile >= 0 && newFile < 8) {
             int newSquare = newRank*8 + newFile;
@@ -997,10 +1014,12 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
 
     // he can't escape
     if(check == CheckType::DOUBLE_CHECK) {
+
         if(isWhiteTurn) board.blackKingCheckmated = true;
         board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
         return;
     }
+
 
     Piece checkingPiece = (directCheckingPiece == Piece::EMPTY ? discoveryCheckingPiece : directCheckingPiece);
     int checkingPieceSquare = (directCheckingPiece == Piece::EMPTY ? board.discoveryCheckSquare : board.directCheckSquare);
@@ -1008,9 +1027,11 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     uint64_t defenderLegalMoves = generateLegalAttacksForColor(!isWhiteTurn, true, false, true, board);
 
     // if checking piece is a knight, killing it is the only way to prevent checkmate
-    if((int)checkingPiece % 6 == 1 && ((1ULL << checkingPieceSquare) & defenderLegalMoves) == 0) {
-        if(isWhiteTurn) board.blackKingCheckmated = true;
-        board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
+    if((int)checkingPiece % 6 == 1) {
+        if(((1ULL << checkingPieceSquare) & defenderLegalMoves) == 0) {
+            if(isWhiteTurn) board.blackKingCheckmated = true;
+            board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
+        }
         return;
     }
 
@@ -1018,18 +1039,22 @@ void calculateMoveResult(CheckType check, uint64_t positionHash, bool isWhiteTur
     uint64_t kingToCheckingPieceMask = rangeMasks[oppKingSquare][checkingPieceSquare];
     kingToCheckingPieceMask &= ~(1ULL << oppKingSquare);
 
+
     if((defenderLegalMoves & kingToCheckingPieceMask) == 0) {
         if(isWhiteTurn) board.blackKingCheckmated = true;
         board.setGameResult(isWhiteTurn ? GameResult::WHITE_WON_BY_CHECKMATE : GameResult::BLACK_WON_BY_CHECKMATE);
         return;
     }
+}
 
-    // check for 50 move rule
-    if(board.halfMovesCount == 100) {
-        board.drawBy50HalfMoves = true;
-        board.setGameResult(GameResult::DRAW_BY_50_HALF_MOVES);
-        return;
+
+bool doesColorHaveInsufficientMaterial(bool white, const Board& board) {
+    // if a pawn is present or a rook is present or a queen is present not insufficient
+    if((board.getPieceBitBoard(white ? Piece::WHITE_PAWN : Piece::BLACK_PAWN) | board.getPieceBitBoard(white ? Piece::WHITE_ROOK : Piece::BLACK_ROOK) | board.getPieceBitBoard(white ? Piece::WHITE_QUEEN : Piece::BLACK_QUEEN)) == 0) {
+        if(__builtin_popcountll(board.getPieceBitBoard(white ? Piece::WHITE_BISHOP : Piece::BLACK_BISHOP) | board.getPieceBitBoard(white ? Piece::WHITE_KNIGHT : Piece::BLACK_KNIGHT)) <= 1) return true;        
     }
+
+    return false;
 }
 
 };

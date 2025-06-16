@@ -8,99 +8,95 @@
 #include <algorithm>
 #include <memory>
 #include <sstream>
+#include <chrono>
+#include <climits>
 
 namespace LC {
 
-enum MoveResult {
-    GAME_IN_PROGRESS,
-    DRAW_BY_REPITITION,
-    DRAW_BY_50_MOVE_RULE,
-    DRAW_BY_STALEMATE,
-    DRAW_BY_INSUFFICIENT_MATERIAL,
-    WHITE_WON_BY_CHECKMATE,
-    BLACK_WON_BY_CHECKMATE
-};
+class Board;
+struct Move;
 
 class LegalChess {
 public:
-    LegalChess() : m_pBoard(std::make_unique<Board>(MoveManagerFactory::getReference())) {}
-    LegalChess(std::string uciMoves) : m_pBoard(std::make_unique<Board>(uciMoves, MoveManagerFactory::getReference())) {
-        int moveCount = 1;
+    LegalChess() : m_pBoard(std::make_unique<Board>()) {}
+    LegalChess(std::string uciMoves) : m_pBoard(std::make_unique<Board>()) {
 
         std::stringstream ss(uciMoves);
         std::string move;
+
+        long long totalTime = 0;
+        long minTime = LONG_MAX;
+        long maxTime = LONG_MIN;
+
         while(ss >> move) {
-            try {
-                if(move.length() == 4) {
-                    makeMove(move.substr(0, 2), move.substr(2));
-                }
-                else if(move.length() == 5) {
-                    promotePawn(move.back(), move.substr(0, 2), move.substr(2, 2));
-                }
-                else {
-                    throw LegalChessError("");
-                }
-                moveCount++;
-            }
+            auto start = std::chrono::high_resolution_clock::now();
 
-            catch(std::exception& e) {
-                std::string moveMsg = e.what();
-                std::string newMsg = "Invalid Move in the move list. Move number: " + std::to_string(moveCount) + move;
-                if(moveMsg.length() > 0) {
-                    newMsg += std::string("Description: ") + moveMsg;
-                }
+            makeMove(move);
 
-                throw LegalChessError(newMsg);
-            }
+            auto end = std::chrono::high_resolution_clock::now();
+
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+
+            totalTime += duration;
+            minTime = std::min(minTime, duration);
+            maxTime = std::max(maxTime, duration);
         }
+
+        std::cout << gameResultToString[(int)m_pBoard->getGameResult()] << std::endl;
+        std::cout << "Average Time: " << totalTime/m_pBoard->getMoveNumber() << std::endl;
+        std::cout << "Max Time: " << maxTime << std::endl;
+        std::cout << "Min Time: " << minTime << std::endl;
+        std::cout << std::endl;
     }
+
     ~LegalChess() = default;
 
-    MoveResult makeMove(std::string fromSquare, std::string toSquare) {
-        validateMove('.', fromSquare, toSquare, false);
-
-        m_pBoard->addMoveToHistory(fromSquare + toSquare);
-
-        return getMoveResult();
-    }
-
-    MoveResult promotePawn(char newPiece, std::string fromSquare, std::string toSquare) {
-        if(std::find(majorPieces.begin(), majorPieces.end(), newPiece) == majorPieces.end()) {
-            throw LegalChessError("Invalid piece specified in promotion: " + std::string(1, newPiece));
+    GameResult makeMove(std::string move) {
+        if(m_pBoard->getGameResult() != GameResult::IN_PROGRESS) {
+            throw GameOverException("Game is Over. Game Result: " + std::string(gameResultToString[(int)m_pBoard->getGameResult()]) + ". Cannot make move. Move number: " + std::to_string(m_pBoard->getMoveNumber() + 1) + ". Move: " + move);
         }
 
-        validateMove(newPiece, fromSquare, toSquare, true);
-        
-        m_pBoard->addMoveToHistory(fromSquare + toSquare + std::string(1, newPiece));
+        Move sMove;
 
-        return getMoveResult();
+        validateMove(move, sMove);
+
+        if(move.length() == 4)
+            m_pBoard->move(sMove);
+        else 
+            m_pBoard->promote(move[4], sMove);
+
+        return m_pBoard->getGameResult();
+    }   
+
+    bool isGameOver() {
+        return m_pBoard->isGameOver();
     }
 
-    bool isChecked(char color) {
-        return m_pBoard->isChecked(color == 'w' ? true : false);
-    }
-
-    bool isCheckmate() {
-        return m_pBoard->isCheckMate;
+    bool isCheckMate(bool white) {
+        return m_pBoard->isCheckmate(white);
     }
 
     bool isStalemate() {
-        return m_pBoard->isStalemate;
-    }
-
-    bool isDrawByInsufficientMaterial() {
-        return m_pBoard->isDrawByInsufficientMaterial;
-    }
-
-    bool isDrawBy50MoveRule() {
-        return m_pBoard->isDrawBy50MoveRule;
+        return m_pBoard->isStalemate();
     }
 
     bool isDrawByRepitition() {
-        return m_pBoard->isDrawByRepitition;
+        return m_pBoard->isDrawByRepitition();
     }
 
-    std::string getFENFromBoard() {
+    bool isDrawByInsufficientMaterial() {
+        return m_pBoard->isDrawyByInsufficientMaterial();
+    }
+
+    bool isDrawBy50MoveRule() {
+        return m_pBoard->isDrawBy50HalfMoves();
+    }
+
+    GameResult getGameResult() {
+        return m_pBoard->getGameResult();
+    }
+
+    std::string getFENString() {
         return m_pBoard->getFENString();
     }
 
@@ -108,45 +104,29 @@ public:
         return m_pBoard->getBoard();
     }
 
-    std::string getUCINotationMoveHistory() {
-        return m_pBoard->moveHistory;
-    }
+
 private:
-    MoveResult getMoveResult() {
-        if(m_pBoard->isCheckMate) return m_pBoard->isWhiteTurn ? MoveResult::WHITE_WON_BY_CHECKMATE : MoveResult::BLACK_WON_BY_CHECKMATE;
-        if(m_pBoard->isStalemate) return MoveResult::DRAW_BY_STALEMATE;
-        if(m_pBoard->isDrawBy50MoveRule) return MoveResult::DRAW_BY_50_MOVE_RULE;
-        if(m_pBoard->isDrawByInsufficientMaterial) return MoveResult::DRAW_BY_INSUFFICIENT_MATERIAL;
-        if(m_pBoard->isDrawByRepitition) return MoveResult::DRAW_BY_REPITITION;
+    void validateMove(std::string& move, Move& sMove) {
+        int file1 = move[0], rank1 = move[1], file2 = move[2], rank2 = move[3];
 
-        return MoveResult::GAME_IN_PROGRESS;
-    }
-
-    void validateMove(char promotionPiece, std::string fromSquare, std::string toSquare, bool promote) {
-        if(fromSquare.length() != 2 || toSquare.length() != 2) {
-            // throw error
-            throw LegalChessError("Invalid square: " + fromSquare + " ," + toSquare);
+        if((move.length() != 4 && move.length() != 5) || file1 < 'a' || file1 > 'h' || file2 < 'a' || file2 > 'h' || rank1 < '1' || rank1 > '8' || rank2 < '1' || rank2 > '8') {
+            throw InvalidMoveException("The move is invalid. Make sure to follow UCI Notation. Move number: " + std::to_string(m_pBoard->getMoveNumber() + 1) + ". Move: " + move);
         }
 
-        char fromFile = fromSquare[0], fromRank = fromSquare[1], toFile = toSquare[0], toRank = toSquare[1];
-
-        if(fromFile < 'a' || fromFile > 'h' || toFile < 'a' || toFile > 'h' || 
-           fromRank < 1 || fromRank > 8 || toRank < 1 || toRank > 8) 
-        {
-            // throw error
-            throw LegalChessError("Invalid square: " + fromSquare + " ," + toSquare);
-        }
-
-        if(promote) m_pBoard->promote(promotionPiece, fromRank - '1', 'h' - fromFile, toRank - '1', 'h' - toFile, (fromRank- '1') * 8 + 'h' - fromFile, (toRank - '1') * 8 + 'h' - toFile);
-        else m_pBoard->move(fromRank - '1', fromFile - 'a', toRank - '1', toFile - 'a', (fromRank-'1') * 8 + fromFile - 'a', (toRank - '1') * 8 + toFile - 'a');
+        sMove.fromRow = rank1 - '1';
+        sMove.fromCol = 'h' - file1;
+        sMove.toRow = rank2 - '1';
+        sMove.toCol = 'h' - file2;
+        sMove.fromSquare = sMove.fromRow*8 + sMove.fromCol;
+        sMove.toSquare = sMove.toRow*8 + sMove.toCol;
+        sMove.uciMove = move;
     }
 
-    std::vector<char> validPieces = {'B', 'K', 'N', 'P', 'Q', 'R', 'b', 'k', 'n', 'p', 'q', 'r'};
-    std::vector<char> majorPieces = {'B', 'K', 'N', 'Q', 'R', 'b', 'k', 'n', 'q', 'r'};
 
     std::unique_ptr<Board> m_pBoard;
 };
 
-}
+
+};
 
 #endif
